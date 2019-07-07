@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	resp, err := bedrock_ping.Query("myip:19132", time.Second * 5)
+	resp, err := bedrockping.Query("myip:19132", time.Second * 5)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func main() {
 }
 ```
 
-(The default port, 19132, is also available as a const, ```bedrock_ping.DefaultPort```.)
+(The default port, 19132, is also available as a const, ```bedrockping.DefaultPort```.)
 
 ### Response
-The response structure is described in [```bedrock_ping.Response```](https://github.com/ZeroErrors/go-bedrock-ping/blob/master/bedrock-ping.go#L22)
+The response structure is described in [```bedrockping.Response```](https://github.com/ZeroErrors/go-bedrock-ping/blob/master/bedrock-ping.go#L22)

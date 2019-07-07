@@ -1,4 +1,5 @@
-package bedrock_ping
+// Package bedrockping is a simple library to ping Minecraft Bedrock/MCPE servers.
+package bedrockping
 
 import (
 	"bufio"
@@ -13,18 +14,15 @@ import (
 )
 
 const (
+	// DefaultPort is the default Minecraft Bedrock/MCPE server port.
 	DefaultPort = 19132
 )
 
-var offlineMessageDataId = []byte{
-	0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe,
-	0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78,
-}
-
+// Response data returned from ReadUnconnectedPong.
 type Response struct {
 	Timestamp       uint64   `json:"timestamp"`
-	ServerId        uint64   `json:"serverId"`
-	GameId          string   `json:"gameId"`
+	ServerID        uint64   `json:"serverId"`
+	GameID          string   `json:"gameId"`
 	ServerName      string   `json:"serverName"`
 	ProtocolVersion int      `json:"protocolVersion"`
 	MCPEVersion     string   `json:"mcpeVersion"`
@@ -33,6 +31,13 @@ type Response struct {
 	Extra           []string `json:"extra"`
 }
 
+var offlineMessageDataID = []byte{
+	0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe,
+	0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78,
+}
+
+// WriteUnconnectedPing writes the 'Unconnected Ping (0x01)' packet to a connection.
+// Details on the packet structure can be found:
 // https://github.com/NiclasOlofsson/MiNET/blob/5bcfbfd94cff943f31208eb8614b3ff16269fdc7/src/MiNET/MiNET/Net/MCPE%20Protocol.cs#L1003
 func WriteUnconnectedPing(conn net.Conn, timestamp uint64) error {
 	buf := new(bytes.Buffer)
@@ -42,7 +47,7 @@ func WriteUnconnectedPing(conn net.Conn, timestamp uint64) error {
 	if err := binary.Write(buf, binary.BigEndian, timestamp); err != nil {
 		return err
 	}
-	if err := binary.Write(buf, binary.BigEndian, offlineMessageDataId); err != nil {
+	if err := binary.Write(buf, binary.BigEndian, offlineMessageDataID); err != nil {
 		return err
 	}
 
@@ -52,7 +57,7 @@ func WriteUnconnectedPing(conn net.Conn, timestamp uint64) error {
 	return nil
 }
 
-// Reads a UTF-8 string with a uint16 length header
+// ReadUTFString reads a UTF-8 string with a uint16 length header.
 func ReadUTFString(reader io.Reader) (string, error) {
 	var strLen uint16
 	if err := binary.Read(reader, binary.BigEndian, &strLen); err != nil {
@@ -68,8 +73,10 @@ func ReadUTFString(reader io.Reader) (string, error) {
 	return string(strBytes), nil
 }
 
+// ReadUnconnectedPong reads the 'Unconnected Pong (0x1C)' packet from a connection into a Response struct.
+// Details on the packet structure can be found:
 // https://github.com/NiclasOlofsson/MiNET/blob/5bcfbfd94cff943f31208eb8614b3ff16269fdc7/src/MiNET/MiNET/Net/MCPE%20Protocol.cs#L1154
-func ReadUnconnectedPong(conn net.Conn, response *Response) error {
+func ReadUnconnectedPong(conn net.Conn, resp *Response) error {
 	reader := bufio.NewReader(conn)
 
 	id, err := reader.ReadByte()
@@ -77,13 +84,13 @@ func ReadUnconnectedPong(conn net.Conn, response *Response) error {
 		return err
 	}
 	if id != 0x1c {
-		return fmt.Errorf("unexpected packet id %d", id)
+		return fmt.Errorf("unexpected packet id: %d", id)
 	}
 
-	if err = binary.Read(reader, binary.BigEndian, &response.Timestamp); err != nil {
+	if err = binary.Read(reader, binary.BigEndian, &resp.Timestamp); err != nil {
 		return err
 	}
-	if err = binary.Read(reader, binary.BigEndian, &response.ServerId); err != nil {
+	if err = binary.Read(reader, binary.BigEndian, &resp.ServerID); err != nil {
 		return err
 	}
 
@@ -92,8 +99,8 @@ func ReadUnconnectedPong(conn net.Conn, response *Response) error {
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(offlineMessageDataId, magicValue) {
-		return fmt.Errorf("invalid offlineMessageDataId %x", magicValue)
+	if !bytes.Equal(offlineMessageDataID, magicValue) {
+		return fmt.Errorf("invalid offline message data id: %x", magicValue)
 	}
 
 	payload, err := ReadUTFString(reader)
@@ -103,28 +110,28 @@ func ReadUnconnectedPong(conn net.Conn, response *Response) error {
 
 	split := strings.Split(payload, ";")
 	if len(split) < 6 {
-		return fmt.Errorf("invalid payload %s", payload)
+		return fmt.Errorf("invalid payload: %s", payload)
 	}
 	if len(split) > 6 {
-		response.Extra = split[6:]
+		resp.Extra = split[6:]
 	}
 
-	response.GameId = split[0]
-	response.ServerName = split[1]
+	resp.GameID = split[0]
+	resp.ServerName = split[1]
 
-	response.ProtocolVersion, err = strconv.Atoi(split[2])
+	resp.ProtocolVersion, err = strconv.Atoi(split[2])
 	if err != nil {
 		return err
 	}
 
-	response.MCPEVersion = split[3]
+	resp.MCPEVersion = split[3]
 
-	response.PlayerCount, err = strconv.Atoi(split[4])
+	resp.PlayerCount, err = strconv.Atoi(split[4])
 	if err != nil {
 		return err
 	}
 
-	response.MaxPlayers, err = strconv.Atoi(split[5])
+	resp.MaxPlayers, err = strconv.Atoi(split[5])
 	if err != nil {
 		return err
 	}
@@ -132,28 +139,30 @@ func ReadUnconnectedPong(conn net.Conn, response *Response) error {
 	return nil
 }
 
+// Query makes a query to the specified address via the Minecraft Bedrock protocol,
+// if successful it returns a Response containing data from the pong packet.
 func Query(address string, timeout time.Duration) (Response, error) {
-	var response Response
+	var resp Response
 
 	deadline := time.Now().Add(timeout)
 
 	conn, err := net.DialTimeout("udp", address, timeout)
 	if err != nil {
-		return response, err
+		return resp, err
 	}
 	defer conn.Close()
 
 	if err = conn.SetDeadline(deadline); err != nil {
-		return response, err
+		return resp, err
 	}
 
 	if err = WriteUnconnectedPing(conn, 0); err != nil {
-		return response, err
+		return resp, err
 	}
 
-	if err = ReadUnconnectedPong(conn, &response); err != nil {
-		return response, err
+	if err = ReadUnconnectedPong(conn, &resp); err != nil {
+		return resp, err
 	}
 
-	return response, nil
+	return resp, nil
 }
