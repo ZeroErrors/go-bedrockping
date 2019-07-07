@@ -1,4 +1,4 @@
-# go-bedrock-ping
+# go-bedrock-ping [![Go Report Card](https://goreportcard.com/badge/github.com/ZeroErrors/go-bedrock-ping)](https://goreportcard.com/report/github.com/ZeroErrors/go-bedrock-ping) [![GoDoc](https://godoc.org/github.com/ZeroErrors/go-bedrock-ping?status.svg)](https://godoc.org/github.com/ZeroErrors/go-bedrock-ping)
 A simple Go library to ping Minecraft Bedrock/MCPE servers.
 
 ## Usage
