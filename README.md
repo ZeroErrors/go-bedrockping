@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	resp, err := bedrockping.Query("myip:19132", time.Second * 5)
+	resp, err := bedrockping.Query("myip:19132", 5 * time.Second, 150 * time.Millisecond)
 	if err != nil {
 		log.Fatal(err)
 	}

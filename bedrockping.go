@@ -4,6 +4,7 @@ package bedrockping
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -36,22 +37,29 @@ var offlineMessageDataID = []byte{
 	0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78,
 }
 
-// WriteUnconnectedPing writes the 'Unconnected Ping (0x01)' packet to a connection.
-// Details on the packet structure can be found:
-// https://github.com/NiclasOlofsson/MiNET/blob/5bcfbfd94cff943f31208eb8614b3ff16269fdc7/src/MiNET/MiNET/Net/MCPE%20Protocol.cs#L1003
-func WriteUnconnectedPing(conn net.Conn, timestamp uint64) error {
+// WriteUnconnectedPingPacket writes the 'Unconnected Ping (0x01)' as a single packet to a connection.
+func WriteUnconnectedPingPacket(conn net.Conn, timestamp uint64) error {
 	buf := new(bytes.Buffer)
-	if err := buf.WriteByte(0x01); err != nil {
-		return err
-	}
-	if err := binary.Write(buf, binary.BigEndian, timestamp); err != nil {
-		return err
-	}
-	if err := binary.Write(buf, binary.BigEndian, offlineMessageDataID); err != nil {
+
+	if err := WriteUnconnectedPing(buf, timestamp); err != nil {
 		return err
 	}
 
-	if _, err := conn.Write(buf.Bytes()); err != nil {
+	_, err := conn.Write(buf.Bytes())
+	return err
+}
+
+// WriteUnconnectedPing writes the 'Unconnected Ping (0x01)' packet to a writer.
+// Details on the packet structure can be found:
+// https://github.com/NiclasOlofsson/MiNET/blob/5bcfbfd94cff943f31208eb8614b3ff16269fdc7/src/MiNET/MiNET/Net/MCPE%20Protocol.cs#L1003
+func WriteUnconnectedPing(writer io.Writer, timestamp uint64) error {
+	if err := binary.Write(writer, binary.BigEndian, byte(0x01)); err != nil {
+		return err
+	}
+	if err := binary.Write(writer, binary.BigEndian, timestamp); err != nil {
+		return err
+	}
+	if _, err := writer.Write(offlineMessageDataID); err != nil {
 		return err
 	}
 	return nil
@@ -65,8 +73,7 @@ func ReadUTFString(reader io.Reader) (string, error) {
 	}
 
 	strBytes := make([]byte, strLen)
-	_, err := reader.Read(strBytes)
-	if err != nil {
+	if _, err := reader.Read(strBytes); err != nil {
 		return "", err
 	}
 
@@ -76,9 +83,7 @@ func ReadUTFString(reader io.Reader) (string, error) {
 // ReadUnconnectedPong reads the 'Unconnected Pong (0x1C)' packet from a connection into a Response struct.
 // Details on the packet structure can be found:
 // https://github.com/NiclasOlofsson/MiNET/blob/5bcfbfd94cff943f31208eb8614b3ff16269fdc7/src/MiNET/MiNET/Net/MCPE%20Protocol.cs#L1154
-func ReadUnconnectedPong(conn net.Conn, resp *Response) error {
-	reader := bufio.NewReader(conn)
-
+func ReadUnconnectedPong(reader *bufio.Reader, resp *Response) error {
 	id, err := reader.ReadByte()
 	if err != nil {
 		return err
@@ -94,13 +99,12 @@ func ReadUnconnectedPong(conn net.Conn, resp *Response) error {
 		return err
 	}
 
-	magicValue := make([]byte, 16)
-	_, err = reader.Read(magicValue)
-	if err != nil {
+	temp := make([]byte, 16)
+	if _, err = reader.Read(temp); err != nil {
 		return err
 	}
-	if !bytes.Equal(offlineMessageDataID, magicValue) {
-		return fmt.Errorf("invalid offline message data id: %x", magicValue)
+	if !bytes.Equal(offlineMessageDataID, temp) {
+		return fmt.Errorf("invalid offline message data id: %x", temp)
 	}
 
 	payload, err := ReadUTFString(reader)
@@ -141,7 +145,8 @@ func ReadUnconnectedPong(conn net.Conn, resp *Response) error {
 
 // Query makes a query to the specified address via the Minecraft Bedrock protocol,
 // if successful it returns a Response containing data from the pong packet.
-func Query(address string, timeout time.Duration) (Response, error) {
+// resend is the interval that the ping packet is sent in case there is packet loss.
+func Query(address string, timeout time.Duration, resend time.Duration) (Response, error) {
 	var resp Response
 
 	deadline := time.Now().Add(timeout)
@@ -156,13 +161,36 @@ func Query(address string, timeout time.Duration) (Response, error) {
 		return resp, err
 	}
 
-	if err = WriteUnconnectedPing(conn, 0); err != nil {
+	ctx, cancel := context.WithDeadline(context.TODO(), deadline)
+	defer cancel()
+
+	var errs chan error
+
+	// Repeat sending ping packet in case there is packet loss
+	ticker := time.NewTicker(resend)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := WriteUnconnectedPingPacket(conn, 0); err != nil {
+					errs <- err
+					return
+				}
+			}
+		}
+	}()
+
+	reader := bufio.NewReader(conn)
+	if err = ReadUnconnectedPong(reader, &resp); err != nil {
 		return resp, err
 	}
 
-	if err = ReadUnconnectedPong(conn, &resp); err != nil {
+	select {
+	case err := <-errs:
 		return resp, err
+	default:
+		return resp, nil
 	}
-
-	return resp, nil
 }
