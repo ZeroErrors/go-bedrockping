@@ -13,22 +13,24 @@ import (
 )
 
 const (
-	// Default port
 	DefaultPort = 19132
 )
 
-var offlineMessageDataId = []byte{0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe, 0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78}
+var offlineMessageDataId = []byte{
+	0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe,
+	0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78,
+}
 
 type Response struct {
-	Timestamp		uint64		`json:"timestamp"`
-	ServerId		uint64		`json:"serverId"`
-	GameId			string		`json:"gameId"`
-	ServerName		string		`json:"serverName"`
-	ProtocolVersion	int			`json:"protocolVersion"`
-	MCPEVersion		string		`json:"mcpeVersion"`
-	PlayerCount		int			`json:"playerCount"`
-	MaxPlayers		int			`json:"maxPlayers"`
-	Extra			[]string	`json:"extra"`
+	Timestamp       uint64   `json:"timestamp"`
+	ServerId        uint64   `json:"serverId"`
+	GameId          string   `json:"gameId"`
+	ServerName      string   `json:"serverName"`
+	ProtocolVersion int      `json:"protocolVersion"`
+	MCPEVersion     string   `json:"mcpeVersion"`
+	PlayerCount     int      `json:"playerCount"`
+	MaxPlayers      int      `json:"maxPlayers"`
+	Extra           []string `json:"extra"`
 }
 
 // https://github.com/NiclasOlofsson/MiNET/blob/5bcfbfd94cff943f31208eb8614b3ff16269fdc7/src/MiNET/MiNET/Net/MCPE%20Protocol.cs#L1003
@@ -50,16 +52,19 @@ func WriteUnconnectedPing(conn net.Conn, timestamp uint64) error {
 	return nil
 }
 
+// Reads a UTF-8 string with a uint16 length header
 func ReadUTFString(reader io.Reader) (string, error) {
 	var strLen uint16
 	if err := binary.Read(reader, binary.BigEndian, &strLen); err != nil {
 		return "", err
 	}
+
 	strBytes := make([]byte, strLen)
 	_, err := reader.Read(strBytes)
 	if err != nil {
 		return "", err
 	}
+
 	return string(strBytes), nil
 }
 
@@ -104,8 +109,8 @@ func ReadUnconnectedPong(conn net.Conn, response *Response) error {
 		response.Extra = split[6:]
 	}
 
-	response.GameId		= split[0]
-	response.ServerName	= split[1]
+	response.GameId = split[0]
+	response.ServerName = split[1]
 
 	response.ProtocolVersion, err = strconv.Atoi(split[2])
 	if err != nil {
