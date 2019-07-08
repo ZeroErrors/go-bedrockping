@@ -86,15 +86,15 @@ func TestReadUTFString(t *testing.T) {
 
 func TestReadUnconnectedPong(t *testing.T) {
 	expect := Response{
-		Timestamp: 0,
-		ServerID: 0,
-		GameID: "MCPE",
-		ServerName: "ServerName",
+		Timestamp:       0,
+		ServerID:        0,
+		GameID:          "MCPE",
+		ServerName:      "ServerName",
 		ProtocolVersion: 0,
-		MCPEVersion: "0.0.0",
-		PlayerCount: 0,
-		MaxPlayers: 0,
-		Extra: []string{"Extra","Stuff"},
+		MCPEVersion:     "0.0.0",
+		PlayerCount:     0,
+		MaxPlayers:      0,
+		Extra:           []string{"Extra", "Stuff"},
 	}
 
 	buf := new(bytes.Buffer)
@@ -139,7 +139,7 @@ func TestReadUnconnectedPong(t *testing.T) {
 }
 
 func TestQuery(t *testing.T) {
-	_, err := Query("hivebedrock.network:19132", 5 * time.Second, 150 * time.Millisecond)
+	_, err := Query("hivebedrock.network:19132", 5*time.Second, 150*time.Millisecond)
 	if err != nil {
 		t.Error(err)
 	}
